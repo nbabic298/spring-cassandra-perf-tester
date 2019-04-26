@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: cassandra-tester
+  main:
+    allow-bean-definition-overriding: false
+
+telemetry:
+  cassandra:
+    contact-points: 192.168.113.134
+    production-replication: false
+
+logging:
+  level:
+    org:
+      springframework:
+        web:
+          reactive:
+            function:
+              client:
+                ExchangeFunctions: TRACE
+        data:
+          cassandra:
+            core:
+              cql:
+                session: DEBUG
