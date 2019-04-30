@@ -1,5 +1,7 @@
 package hr.cc.util.cassandra.cassandratester.telemetry.config;
 
+import com.datastax.driver.core.ConsistencyLevel;
+import com.datastax.driver.core.QueryOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.cassandra.config.AbstractReactiveCassandraConfiguration;
@@ -30,6 +32,13 @@ public class CassandraTablesAndMvConfig extends AbstractReactiveCassandraConfigu
     }
 
     @Override
+    protected QueryOptions getQueryOptions() {
+        QueryOptions queryOptions = new QueryOptions();
+        queryOptions.setConsistencyLevel(ConsistencyLevel.QUORUM);
+        return queryOptions;
+    }
+
+    @Override
     public String[] getEntityBasePackages() {
         return new String[]{"hr.cc.util.cassandra.cassandratester.telemetry.mv.model.table",
         "hr.cc.util.cassandra.cassandratester.telemetry.tablessasi.model",
@@ -43,7 +52,7 @@ public class CassandraTablesAndMvConfig extends AbstractReactiveCassandraConfigu
                 Collections.singletonList(
                         CreateKeyspaceSpecification.createKeyspace(KEYSPACE)
                                 .ifNotExists()
-                                .withNetworkReplication(DataCenterReplication.of("DC1", 2L))) :
+                                .withNetworkReplication(DataCenterReplication.of("DC1", 3L))) :
 
                 Collections.singletonList(
                         CreateKeyspaceSpecification.createKeyspace(KEYSPACE)

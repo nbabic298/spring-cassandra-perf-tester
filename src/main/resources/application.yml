@@ -22,4 +22,4 @@ logging:
           cassandra:
             core:
               cql:
-                session: DEBUG
+                session: INFO
