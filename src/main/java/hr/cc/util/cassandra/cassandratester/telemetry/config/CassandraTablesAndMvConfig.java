@@ -43,8 +43,7 @@ public class CassandraTablesAndMvConfig extends AbstractReactiveCassandraConfigu
                 Collections.singletonList(
                         CreateKeyspaceSpecification.createKeyspace(KEYSPACE)
                                 .ifNotExists()
-                                .withNetworkReplication(DataCenterReplication.of("DC1", 3L),
-                                        DataCenterReplication.of("DC2", 3L))) :
+                                .withNetworkReplication(DataCenterReplication.of("DC1", 2L))) :
 
                 Collections.singletonList(
                         CreateKeyspaceSpecification.createKeyspace(KEYSPACE)

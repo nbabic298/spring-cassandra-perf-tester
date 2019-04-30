@@ -17,7 +17,7 @@ logging:
           reactive:
             function:
               client:
-                ExchangeFunctions: TRACE
+                ExchangeFunctions: DEBUG
         data:
           cassandra:
             core:
