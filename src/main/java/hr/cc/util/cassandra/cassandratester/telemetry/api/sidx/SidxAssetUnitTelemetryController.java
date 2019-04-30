@@ -72,7 +72,7 @@ public class SidxAssetUnitTelemetryController {
                     .sequential()
                     .collectList()
                     .map(tl -> {
-                        long time = System.currentTimeMillis();
+
                         Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
                         for (SidxTelemetryByAssetUnit telemetryByAssetUnit : tl) {
                             if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
@@ -84,7 +84,7 @@ public class SidxAssetUnitTelemetryController {
                                                 .build());
                             }
                         }
-                        log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
+
                         return telemetryMap;
                     });
 
@@ -99,7 +99,6 @@ public class SidxAssetUnitTelemetryController {
                             .map(tll -> tll.stream().flatMap(List::stream).collect(Collectors.toList()))
                             .map(tl -> {
 
-                                long time = System.currentTimeMillis();
                                 Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
                                 for (SidxTelemetryByAssetUnit telemetryByAssetUnit : tl) {
                                     if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
@@ -112,7 +111,6 @@ public class SidxAssetUnitTelemetryController {
                                     }
                                 }
 
-                                log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
                                 return telemetryMap;
                             })).collectList().map(m -> m.stream()
                             .flatMap(map -> map.entrySet().stream())
@@ -142,7 +140,7 @@ public class SidxAssetUnitTelemetryController {
                     .collectList()
                     .publishOn(Schedulers.elastic())
                     .map(tl -> {
-                        long time = System.currentTimeMillis();
+
                         Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
                         for (SidxTelemetryByAssetUnit telemetryByAssetUnit : tl) {
                             if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
@@ -154,7 +152,7 @@ public class SidxAssetUnitTelemetryController {
                                                 .build());
                             }
                         }
-                        log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
+
                         return telemetryMap;
                     });
         } else {
@@ -169,7 +167,6 @@ public class SidxAssetUnitTelemetryController {
                             .map(tll -> tll.stream().flatMap(List::stream).collect(Collectors.toList()))
                             .map(tl -> {
 
-                                long time = System.currentTimeMillis();
                                 Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
                                 for (SidxTelemetryByAssetUnit telemetryByAssetUnit : tl) {
                                     if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
@@ -182,7 +179,6 @@ public class SidxAssetUnitTelemetryController {
                                     }
                                 }
 
-                                log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
                                 return telemetryMap;
                             })).collectList().map(m -> m.stream()
                             .flatMap(map -> map.entrySet().stream())
@@ -206,66 +202,84 @@ public class SidxAssetUnitTelemetryController {
                     .flatMap(p -> telemetryByAssetUnitRepository.findByPkApplicationIdAndPkAssetUnitIdAndPkPartitionAndPkTimeUuidGreaterThanAndPkTimeUuidLessThan(
                             appId, assetUnitId, p, UUIDs.endOf(from), UUIDs.startOf(to), CassandraPageRequest.first(limit))
                             .collectList(), 1)
-                    .scan(new ArrayList<>(), (list, telemetryList) -> {
-                        list.addAll(telemetryList);
-                        return list;
+                    .scan(new HashMap<String, List<SidxTelemetryByAssetUnit>>(), (resultMap, telemetryList) -> {
+                        telemetryList.sort(Comparator.comparing(t -> UUIDs.unixTimestamp(t.getPk().getTimeUuid())));
+                        for (SidxTelemetryByAssetUnit telemetryByAssetUnit : telemetryList) {
+                            resultMap.computeIfAbsent(telemetryByAssetUnit.getKey(), v -> new ArrayList<>()).add(telemetryByAssetUnit);
+                        }
+                        return resultMap;
                     })
-                    .takeUntil(list -> list.size() >= limit)
+                    .takeUntil(map -> {
+                        boolean allKeyValuesLimitReached = true;
+                        if (map.size() > 0) {
+                            for (String key : map.keySet()) {
+                                if (map.get(key).size() < limit) {
+                                    allKeyValuesLimitReached = false;
+                                }
+                            }
+                        } else {
+                            allKeyValuesLimitReached = false;
+                        }
+                        return allKeyValuesLimitReached;
+                    })
                     .collectList()
                     .map(tll -> {
-                        long time = System.currentTimeMillis();
+
                         Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
-                        for (Object telemetryByAssetUnitObj : tll.get(tll.size() - 1)) {
-                            SidxTelemetryByAssetUnit telemetryByAssetUnit = (SidxTelemetryByAssetUnit) telemetryByAssetUnitObj;
-                            if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
-                                    telemetryMap.get(telemetryByAssetUnit.getKey()).size() < limit) {
-                                telemetryMap.computeIfAbsent(telemetryByAssetUnit.getKey(), v -> new ArrayList<>())
-                                        .add(TelemetryDataResource.TelemetryReading.builder()
-                                                .time(UUIDs.unixTimestamp(telemetryByAssetUnit.getPk().getTimeUuid()))
-                                                .value(String.valueOf(telemetryByAssetUnit.getValue()))
-                                                .build());
+                        for (String key : tll.get(tll.size() - 1).keySet()) {
+                            for (SidxTelemetryByAssetUnit telemetryByAssetUnit : tll.get(tll.size() - 1).get(key)) {
+                                if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
+                                        telemetryMap.get(telemetryByAssetUnit.getKey()).size() < limit) {
+                                    telemetryMap.computeIfAbsent(telemetryByAssetUnit.getKey(), v -> new ArrayList<>())
+                                            .add(TelemetryDataResource.TelemetryReading.builder()
+                                                    .time(UUIDs.unixTimestamp(telemetryByAssetUnit.getPk().getTimeUuid()))
+                                                    .value(String.valueOf(telemetryByAssetUnit.getValue()))
+                                                    .build());
+                                }
                             }
                         }
-                        log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
                         return telemetryMap;
                     });
 
         } else {
+
             return Flux.just(keys.toArray(String[]::new))
                     .flatMap(key -> Flux.fromIterable(partitionService.getPartitions(from, to))
                             .flatMap(p -> telemetryByAssetUnitRepository.findByPkApplicationIdAndPkAssetUnitIdAndPkPartitionAndPkTimeUuidGreaterThanAndPkTimeUuidLessThanAndKey(
                                     appId, assetUnitId, p, UUIDs.endOf(from), UUIDs.startOf(to), key, CassandraPageRequest.first(limit))
                                     .collectList(), 1)
                             .scan(new ArrayList<>(), (list, telemetryList) -> {
-                                list.addAll(telemetryList);
+                                list.add(telemetryList);
                                 return list;
                             })
-                            .takeUntil(list -> list.size() >= limit)
+                            .takeUntil(list -> list.stream().mapToInt(i -> ((List) i).size()).sum() >= limit)
                             .collectList()
-                            .map(tll -> tll.stream().flatMap(List::stream).collect(Collectors.toList()))
-                            .map(tl -> {
+                            .map(tlll -> tlll.get(tlll.size() - 1))
+                            .map(tll -> {
 
-                                long time = System.currentTimeMillis();
                                 Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
-                                for (Object telemetryByAssetUnitObj : tl) {
-                                    SidxTelemetryByAssetUnit telemetryByAssetUnit = (SidxTelemetryByAssetUnit) telemetryByAssetUnitObj;
-                                    if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
-                                            telemetryMap.get(telemetryByAssetUnit.getKey()).size() < limit) {
-                                        telemetryMap.computeIfAbsent(telemetryByAssetUnit.getKey(), v -> new ArrayList<>())
-                                                .add(TelemetryDataResource.TelemetryReading.builder()
-                                                        .time(UUIDs.unixTimestamp(telemetryByAssetUnit.getPk().getTimeUuid()))
-                                                        .value(String.valueOf(telemetryByAssetUnit.getValue()))
-                                                        .build());
+                                for (Object telemetryByAssetUnitListObj : tll) {
+                                    Collections.reverse((List) telemetryByAssetUnitListObj);
+                                    for (Object telemetryByAssetUnitObj : (List) telemetryByAssetUnitListObj) {
+                                        SidxTelemetryByAssetUnit telemetryByAssetUnit = (SidxTelemetryByAssetUnit) telemetryByAssetUnitObj;
+                                        if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
+                                                telemetryMap.get(telemetryByAssetUnit.getKey()).size() < limit) {
+                                            telemetryMap.computeIfAbsent(telemetryByAssetUnit.getKey(), v -> new ArrayList<>())
+                                                    .add(TelemetryDataResource.TelemetryReading.builder()
+                                                            .time(UUIDs.unixTimestamp(telemetryByAssetUnit.getPk().getTimeUuid()))
+                                                            .value(String.valueOf(telemetryByAssetUnit.getValue()))
+                                                            .build());
+                                        }
                                     }
                                 }
 
-                                log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
                                 return telemetryMap;
-                            })).collectList().map(m -> m.stream()
+                            })).collectList()
+                    .map(m -> m.stream()
                             .flatMap(map -> map.entrySet().stream())
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
-                                    (l1, l2) -> Stream.concat(l1.stream(), l2.stream()).limit(limit).collect(Collectors.toList()))));
-
+                                    (l1, l2) -> Stream.concat(l1.stream(), l2.stream()).limit(limit)
+                                            .collect(Collectors.toList()))));
         }
 
     }

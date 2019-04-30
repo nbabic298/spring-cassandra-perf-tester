@@ -78,7 +78,7 @@ public class MvAssetUnitTelemetryController {
                     .sequential()
                     .collectList()
                     .map(tl -> {
-                        long time = System.currentTimeMillis();
+
                         Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
                         for (MvTelemetryByAssetUnit telemetryByAssetUnit : tl) {
                             if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
@@ -90,7 +90,7 @@ public class MvAssetUnitTelemetryController {
                                                 .build());
                             }
                         }
-                        log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
+
                         return telemetryMap;
                     });
 
@@ -105,7 +105,6 @@ public class MvAssetUnitTelemetryController {
                             .map(tll -> tll.stream().flatMap(List::stream).collect(Collectors.toList()))
                             .map(tl -> {
 
-                                long time = System.currentTimeMillis();
                                 Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
                                 for (MvTelemetryByAssetUnitAndKey telemetryByAssetUnit : tl) {
                                     if (telemetryMap.get(telemetryByAssetUnit.getPk().getKey()) == null ||
@@ -118,7 +117,6 @@ public class MvAssetUnitTelemetryController {
                                     }
                                 }
 
-                                log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
                                 return telemetryMap;
                             })).collectList().map(m -> m.stream()
                             .flatMap(map -> map.entrySet().stream())
@@ -147,7 +145,7 @@ public class MvAssetUnitTelemetryController {
                     .collectList()
                     .publishOn(Schedulers.elastic())
                     .map(tl -> {
-                        long time = System.currentTimeMillis();
+
                         Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
                         for (MvTelemetryByAssetUnit telemetryByAssetUnit : tl) {
                             if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
@@ -159,7 +157,7 @@ public class MvAssetUnitTelemetryController {
                                                 .build());
                             }
                         }
-                        log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
+
                         return telemetryMap;
                     });
         } else {
@@ -214,27 +212,42 @@ public class MvAssetUnitTelemetryController {
                     .flatMap(p -> telemetryByAssetUnitRepository.findByPkApplicationIdAndPkAssetUnitIdAndPkPartitionAndPkTimeUuidGreaterThanAndPkTimeUuidLessThan(
                             appId, assetUnitId, p, UUIDs.endOf(from), UUIDs.startOf(to), CassandraPageRequest.first(limit))
                             .collectList(), 1)
-                    .scan(new ArrayList<>(), (list, telemetryList) -> {
-                        list.addAll(telemetryList);
-                        return list;
+                    .scan(new HashMap<String, List<MvTelemetryByAssetUnit>>(), (resultMap, telemetryList) -> {
+                        telemetryList.sort(Comparator.comparing(t -> UUIDs.unixTimestamp(t.getPk().getTimeUuid())));
+                        for (MvTelemetryByAssetUnit telemetryByAssetUnit : telemetryList) {
+                            resultMap.computeIfAbsent(telemetryByAssetUnit.getKey(), v -> new ArrayList<>()).add(telemetryByAssetUnit);
+                        }
+                        return resultMap;
                     })
-                    .takeUntil(list -> list.size() >= limit)
+                    .takeUntil(map -> {
+                        boolean allKeyValuesLimitReached = true;
+                        if (map.size() > 0) {
+                            for (String key : map.keySet()) {
+                                if (map.get(key).size() < limit) {
+                                    allKeyValuesLimitReached = false;
+                                }
+                            }
+                        } else {
+                            allKeyValuesLimitReached = false;
+                        }
+                        return allKeyValuesLimitReached;
+                    })
                     .collectList()
                     .map(tll -> {
-                        long time = System.currentTimeMillis();
+
                         Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
-                        for (Object telemetryByAssetUnitObj : tll.get(tll.size() - 1)) {
-                            MvTelemetryByAssetUnit telemetryByAssetUnit = (MvTelemetryByAssetUnit) telemetryByAssetUnitObj;
-                            if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
-                                    telemetryMap.get(telemetryByAssetUnit.getKey()).size() < limit) {
-                                telemetryMap.computeIfAbsent(telemetryByAssetUnit.getKey(), v -> new ArrayList<>())
-                                        .add(TelemetryDataResource.TelemetryReading.builder()
-                                                .time(UUIDs.unixTimestamp(telemetryByAssetUnit.getPk().getTimeUuid()))
-                                                .value(String.valueOf(telemetryByAssetUnit.getValue()))
-                                                .build());
+                        for (String key : tll.get(tll.size() - 1).keySet()) {
+                            for (MvTelemetryByAssetUnit telemetryByAssetUnit : tll.get(tll.size() - 1).get(key)) {
+                                if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
+                                        telemetryMap.get(telemetryByAssetUnit.getKey()).size() < limit) {
+                                    telemetryMap.computeIfAbsent(telemetryByAssetUnit.getKey(), v -> new ArrayList<>())
+                                            .add(TelemetryDataResource.TelemetryReading.builder()
+                                                    .time(UUIDs.unixTimestamp(telemetryByAssetUnit.getPk().getTimeUuid()))
+                                                    .value(String.valueOf(telemetryByAssetUnit.getValue()))
+                                                    .build());
+                                }
                             }
                         }
-                        log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
                         return telemetryMap;
                     });
 
@@ -246,34 +259,37 @@ public class MvAssetUnitTelemetryController {
                                     appId, assetUnitId, p, UUIDs.endOf(from), UUIDs.startOf(to), key, limit)
                                     .collectList(), 1)
                             .scan(new ArrayList<>(), (list, telemetryList) -> {
-                                list.addAll(telemetryList);
+                                list.add(telemetryList);
                                 return list;
                             })
-                            .takeUntil(list -> list.size() >= limit)
+                            .takeUntil(list -> list.stream().mapToInt(i -> ((List) i).size()).sum() >= limit)
                             .collectList()
-                            .map(tll -> tll.stream().flatMap(List::stream).collect(Collectors.toList()))
-                            .map(tl -> {
+                            .map(tlll -> tlll.get(tlll.size() - 1))
+                            .map(tll -> {
 
-                                long time = System.currentTimeMillis();
                                 Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
-                                for (Object telemetryByAssetUnitObj : tl) {
-                                    MvTelemetryByAssetUnitAndKey telemetryByAssetUnit = (MvTelemetryByAssetUnitAndKey) telemetryByAssetUnitObj;
-                                    if (telemetryMap.get(telemetryByAssetUnit.getPk().getKey()) == null ||
-                                            telemetryMap.get(telemetryByAssetUnit.getPk().getKey()).size() < limit) {
-                                        telemetryMap.computeIfAbsent(telemetryByAssetUnit.getPk().getKey(), v -> new ArrayList<>())
-                                                .add(TelemetryDataResource.TelemetryReading.builder()
-                                                        .time(UUIDs.unixTimestamp(telemetryByAssetUnit.getPk().getTimeUuid()))
-                                                        .value(String.valueOf(telemetryByAssetUnit.getValue()))
-                                                        .build());
+                                for (Object telemetryByAssetUnitAndKeyListObj : tll) {
+                                    Collections.reverse((List) telemetryByAssetUnitAndKeyListObj);
+                                    for (Object telemetryByAssetUnitAndKeyObj : (List) telemetryByAssetUnitAndKeyListObj) {
+                                        MvTelemetryByAssetUnitAndKey telemetryByAssetUnitAndKey = (MvTelemetryByAssetUnitAndKey) telemetryByAssetUnitAndKeyObj;
+                                        if (telemetryMap.get(telemetryByAssetUnitAndKey.getPk().getKey()) == null ||
+                                                telemetryMap.get(telemetryByAssetUnitAndKey.getPk().getKey()).size() < limit) {
+                                            telemetryMap.computeIfAbsent(telemetryByAssetUnitAndKey.getPk().getKey(), v -> new ArrayList<>())
+                                                    .add(TelemetryDataResource.TelemetryReading.builder()
+                                                            .time(UUIDs.unixTimestamp(telemetryByAssetUnitAndKey.getPk().getTimeUuid()))
+                                                            .value(String.valueOf(telemetryByAssetUnitAndKey.getValue()))
+                                                            .build());
+                                        }
                                     }
                                 }
 
-                                log.info("Transformation in millis: {}", System.currentTimeMillis() - time);
                                 return telemetryMap;
-                            })).collectList().map(m -> m.stream()
+                            })).collectList()
+                    .map(m -> m.stream()
                             .flatMap(map -> map.entrySet().stream())
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
-                                    (l1, l2) -> Stream.concat(l1.stream(), l2.stream()).limit(limit).collect(Collectors.toList()))));
+                                    (l1, l2) -> Stream.concat(l1.stream(), l2.stream()).limit(limit)
+                                            .collect(Collectors.toList()))));
         }
 
     }
