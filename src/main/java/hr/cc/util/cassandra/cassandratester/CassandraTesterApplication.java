@@ -10,6 +10,7 @@ public class CassandraTesterApplication {
 
 	public static void main(String[] args) {
 		TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+		System.setProperty("reactor.netty.ioWorkerCount", "" + Runtime.getRuntime().availableProcessors() * 2);
 		SpringApplication.run(CassandraTesterApplication.class, args);
 	}
 
