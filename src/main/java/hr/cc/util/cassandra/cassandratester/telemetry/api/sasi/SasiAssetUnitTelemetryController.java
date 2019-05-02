@@ -73,6 +73,8 @@ public class SasiAssetUnitTelemetryController {
                     .collectList()
                     .map(tl -> {
 
+                        long time = System.currentTimeMillis();
+                        log.info("inside mapping sasi v1");
                         Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
                         for (SasiTelemetryByAssetUnit telemetryByAssetUnit : tl) {
                             if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
@@ -85,6 +87,7 @@ public class SasiAssetUnitTelemetryController {
                             }
                         }
 
+                        log.info("inside mapping sasi v1 return time: {} and size: {}", System.currentTimeMillis() - time, telemetryMap.values().size());
                         return telemetryMap;
                     });
 
@@ -99,6 +102,8 @@ public class SasiAssetUnitTelemetryController {
                             .map(tll -> tll.stream().flatMap(List::stream).collect(Collectors.toList()))
                             .map(tl -> {
 
+                                long time = System.currentTimeMillis();
+                                log.info("inside mapping sasi v1");
                                 Map<String, List<TelemetryDataResource.TelemetryReading>> telemetryMap = new HashMap<>();
                                 for (SasiTelemetryByAssetUnit telemetryByAssetUnit : tl) {
                                     if (telemetryMap.get(telemetryByAssetUnit.getKey()) == null ||
@@ -111,6 +116,7 @@ public class SasiAssetUnitTelemetryController {
                                     }
                                 }
 
+                                log.info("inside mapping sasi v1 return time: {} and size: {}", System.currentTimeMillis() - time, telemetryMap.values().size());
                                 return telemetryMap;
                             })).collectList().map(m -> m.stream()
                             .flatMap(map -> map.entrySet().stream())
