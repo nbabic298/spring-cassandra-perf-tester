@@ -22,9 +22,11 @@ public class CassandraTablesAndMvConfig extends AbstractReactiveCassandraConfigu
     @Value("${telemetry.cassandra.contact-points}")
     private String contactPoints;
 
-
     @Value("${telemetry.cassandra.production-replication}")
     private boolean productionReplication;
+
+    @Value("${telemetry.cassandra.isLocalQuorum}")
+    private boolean isLocalQuorum;
 
     @Override
     protected String getKeyspaceName() {
@@ -34,7 +36,7 @@ public class CassandraTablesAndMvConfig extends AbstractReactiveCassandraConfigu
     @Override
     protected QueryOptions getQueryOptions() {
         QueryOptions queryOptions = new QueryOptions();
-        queryOptions.setConsistencyLevel(ConsistencyLevel.QUORUM);
+        queryOptions.setConsistencyLevel(isLocalQuorum ? ConsistencyLevel.LOCAL_QUORUM : ConsistencyLevel.ONE);
         return queryOptions;
     }
 
