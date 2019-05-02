@@ -87,7 +87,7 @@ public class SasiAssetUnitTelemetryController {
                             }
                         }
 
-                        log.info("inside mapping sasi v1 return time: {} and size: {}", System.currentTimeMillis() - time, telemetryMap.values().size());
+                        log.info("inside mapping sasi v1 return time: {} and size: {}", System.currentTimeMillis() - time, telemetryMap.values().stream().mapToInt(l -> l.size()).sum());
                         return telemetryMap;
                     });
 
@@ -116,7 +116,7 @@ public class SasiAssetUnitTelemetryController {
                                     }
                                 }
 
-                                log.info("inside mapping sasi v1 return time: {} and size: {}", System.currentTimeMillis() - time, telemetryMap.values().size());
+                                log.info("inside mapping sasi v1 return time: {} and size: {}", System.currentTimeMillis() - time, telemetryMap.values().stream().mapToInt(l -> l.size()).sum());
                                 return telemetryMap;
                             })).collectList().map(m -> m.stream()
                             .flatMap(map -> map.entrySet().stream())
